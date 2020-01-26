@@ -1,0 +1,284 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "storageAccount": {
+            "type": "string"
+        }, 
+        "dataFactoryName": {
+            "type": "string"
+        },
+        "cosmosDbAccountName": {
+            "type": "string"
+        }  
+    },
+    "variables": {
+        "cosmosDbLinkedServiceName": "Vibranium",
+        "azureTableLinkedServiceName":"DestinationAzureTable",
+        "cosmosInputDatasetName": "CosmosInputDataset",
+        "azureTableOutputDatasetName": "TableOutputDataset",
+        "pipelineToTableName": "pipelineCosmos2TableStorage",
+        "TargetStorageTable" : "tenantInfo",
+        "storageApiVersion": "2017-10-01",
+        "resourceId": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosDbAccountName'))]",
+        "apiVersion": "[providers('Microsoft.DocumentDB', 'databaseAccounts').apiVersions[0]]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[parameters('storageAccount')]",
+            "apiVersion": "2015-06-15",
+            "location": "[resourceGroup().location]",
+            "properties": {
+            "accountType": "Standard_GRS"
+            }
+       },
+       {
+            "name": "[parameters('dataFactoryName')]",
+            "apiVersion": "2015-10-01",
+            "type": "Microsoft.DataFactory/datafactories",
+            "location": "[resourceGroup().location]",
+            "resources": [{
+                    "type": "linkedservices",
+                    "name": "[variables('cosmosDbLinkedServiceName')]",
+                    "dependsOn": [
+                        "[parameters('dataFactoryName')]"
+                        ],
+                    "apiVersion": "2015-10-01",
+                    "properties": {
+                        "state":"Enabled",
+                        "type": "DocumentDb",
+                        "description": "Cosmos Db linked service",
+                        "typeProperties": {
+                        "connectionString": "[concat('AccountEndpoint=https://',parameters('cosmosDbAccountName'),'.documents.azure.com:443/;AccountKey=',listKeys(variables('resourceId'),variables('apiVersion')).primaryMasterKey, ';','database=vibranium')]"
+                      
+                      }
+                    }
+                },
+                {
+                    "type": "linkedservices",
+                    "name": "[variables('azureTableLinkedServiceName')]",
+                    "dependsOn": [
+                        "[parameters('dataFactoryName')]"
+                        ],
+                    "apiVersion": "2015-10-01",
+                    "properties": {
+                        "type": "AzureStorage",
+                        "description": "Azure Table linked service",
+                        "typeProperties": {
+                        "connectionString": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('storageAccount'),';AccountKey=',listkeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccount')), variables('storageApiVersion')).keys[0].value)]"       
+                        }
+                    }
+                },
+                {
+                    "type": "datasets",
+                    "name": "[variables('cosmosInputDatasetName')]",
+                    "dependsOn": [
+                        "[parameters('dataFactoryName')]",
+                        "[variables('cosmosDbLinkedServiceName')]"
+                    ],
+                    "apiVersion": "2015-10-01",
+                    "properties": {
+                        "published": false,
+                        "type": "DocumentDbCollection",
+                        "linkedServiceName": "[variables('cosmosDbLinkedServiceName')]",
+                        "structure": [
+                            {
+                                "name": "created",
+                                "type": "Datetime"
+                            },
+                            {
+                                "name": "id",
+                                "type": "String"
+                            },
+                            {
+                                "name": "tenantId",
+                                "type": "String"
+                            },
+                            {
+                                "name": "name",
+                                "type": "String"
+                            },
+                            {
+                                "name": "organization",
+                                "type": "String"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "Datetime"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "Datetime"
+                            },
+                            {
+                                "name": "type",
+                                "type": "String"
+                            },
+                            {
+                                "name": "source",
+                                "type": "String"
+                            },
+                            {
+                                "name": "region",
+                                "type": "String"
+                            },
+                            {
+                                "name": "hostName",
+                                "type": "String"
+                            }
+                        ],
+                        "typeProperties": {
+                            "collectionName": "tenancy"
+                        },
+                        "availability": {
+                            "frequency": "Day",
+                            "interval": 1,
+                            "offset": "07:00:00"
+                        },
+                        "external": true,
+                        "policy": {}
+                    }
+                },
+                {
+                    "type": "datasets",
+                    "name": "[variables('azureTableOutputDatasetName')]",
+                    "dependsOn": [
+                        "[parameters('dataFactoryName')]",
+                        "[variables('azureTableLinkedServiceName')]"
+                    ],
+                    "apiVersion": "2015-10-01",
+                    "properties": {
+                        "published": false,
+                        "type": "AzureTable",
+                        "linkedServiceName": "[variables('azureTableLinkedServiceName')]",
+                        "structure": [ {
+                            "name": "created",
+                            "type": "Datetime"
+                        },
+                        {
+                            "name": "id",
+                            "type": "String"
+                        },
+                        {
+                            "name": "tenantId",
+                            "type": "String"
+                        },
+                        {
+                            "name": "tenantName",
+                            "type": "String"
+                        },
+                        {
+                            "name": "organization",
+                            "type": "String"
+                        },
+                        {
+                            "name": "licenseStart",
+                            "type": "Datetime"
+                        },
+                        {
+                            "name": "licenseEnd",
+                            "type": "Datetime"
+                        },
+                        {
+                            "name": "licenseType",
+                            "type": "String"
+                        },
+                        {
+                            "name": "Source",
+                            "type": "String"
+                        },
+                        {
+                            "name": "Region",
+                            "type": "String"
+                        },
+                        {
+                            "name": "tenantHostName",
+                            "type": "String"
+                        }
+                        ],
+                        "typeProperties": {
+                            "tableName": "[variables('TargetStorageTable')]"
+                        },
+                        "availability": {
+                            "frequency": "Day",
+                            "interval": 1,
+                            "offset": "07:00:00"
+                        },
+                        "external": false,
+                        "policy": {}
+                    }
+                },
+               
+                
+                {
+                    "type": "datapipelines",
+                    "name": "[variables('pipelineToTableName')]",
+                    "dependsOn": [
+                        "[parameters('dataFactoryName')]",
+                        "[variables('cosmosDbLinkedServiceName')]",
+                        "[variables('azureTableLinkedServiceName')]",
+                        "[variables('cosmosInputDatasetName')]",
+                        "[variables('azureTableOutputDatasetName')]"
+                    ],
+                    "apiVersion": "2015-10-01",
+                    "properties": {
+                        "description": "This pipeline synchronises the tenant info data to table storage",
+                        "activities": [{
+                            "type": "Copy",
+                            "typeProperties": {
+                                "source": {
+                                    "type": "DocumentDbCollectionSource",
+                                    "query": "SELECT c.created, c.id as id, c.id as tenantId, c.name, c.organization, c.license.start_date, c.license.end_date, c.license.type, c.source, c.region, c.hostName from c where c.type= 'tenant'",
+                                    "nestingSeparator": "."
+                                },
+                                "sink": {
+                                    "type": "AzureTableSink",
+                                    "azureTableDefaultPartitionKeyValue": "DefaultPartitionKey",
+                                    "azureTableRowKeyName": "id",
+                                    "azureTableInsertType": "replace",
+                                    "writeBatchSize": 0,
+                                    "writeBatchTimeout": "00:00:00"
+                                },
+                                "translator": {
+                                    "type": "TabularTranslator",
+                                    "columnMappings": "created:created,id:id,tenantId:tenantId,name:tenantName,organization:organization,start_date:licenseStart,end_date:licenseEnd,type:licenseType,source:Source,region:Region, hostName:tenantHostName"
+                                }
+                            },
+                            "inputs": [{
+                                "name": "[variables('cosmosInputDatasetName')]"
+                            }],
+                            "outputs": [{
+                                "name": "[variables('azureTableOutputDatasetName')]"
+                            }],
+                            "policy": {
+                                "timeout": "1.00:00:00",
+                                "concurrency": 1,
+                                "executionPriorityOrder": "NewestFirst",
+                                "style": "StartOfInterval",
+                                "retry": 3,
+                                "longRetry": 0,
+                                "longRetryInterval": "00:00:00"
+                            },
+                            "scheduler": {
+                                "frequency": "Day",
+                                "interval": 1,
+                                "offset": "07:00:00"
+                            },
+                            "name": "Activity-0-tenancy->tenantInfo"
+                        }],
+                        "start": "2019-05-13T01:24:18.391Z",
+                        "end": "2099-12-30T13:00:00Z",
+                        "isPaused": false,
+                        "pipelineMode": "Scheduled"
+                    }
+                }
+                
+                
+            ]
+        }
+
+    ],
+    "outputs": {   
+    }
+}
